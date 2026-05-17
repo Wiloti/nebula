@@ -1,4 +1,4 @@
-{ self, inputs, ... }: {
+{ ... }: {
 	flake.nixosModules.wilotiGit = { pkgs, lib, ... }: {
 		home-manager.users.wiloti = {
 			programs.git = {

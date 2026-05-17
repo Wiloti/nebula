@@ -1,4 +1,4 @@
-{ self, inputs, ... }: {
+{ ... }: {
   flake.nixosModules.wilotiGhostty = { pkgs, lib, ... }: {
     home-manager.users.wiloti = {
 

@@ -1,4 +1,4 @@
-{ self, inputs, ... }: {
+{ self, ... }: {
 	flake.nixosModules.voidConfiguration = { config, pkgs, lib, ... }: {
 		imports = [
 			self.nixosModules.voidBoot
@@ -35,6 +35,7 @@
             self.nixosModules.wilotiMpd
             self.nixosModules.wilotiMpv
             self.nixosModules.wilotiMedia
+            self.nixosModules.wilotiBat
 		];
 
 		environment.systemPackages = with pkgs; [
