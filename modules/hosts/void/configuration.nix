@@ -57,7 +57,8 @@
             wl-clipboard
             fontpreview
 			nix-prefetch-github
-
+            adw-gtk3
+            nwg-look
 		];
 
 		nix.settings.experimental-features = [ "nix-command" "flakes" ];

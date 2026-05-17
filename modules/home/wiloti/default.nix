@@ -1,4 +1,4 @@
-{ self, inputs, ... }: {
+{ inputs, ... }: {
 	flake.nixosModules.wilotiHomeManager = { pkgs, lib, ... }: {
 		home-manager.users.wiloti = {
 			home.username = "wiloti";
