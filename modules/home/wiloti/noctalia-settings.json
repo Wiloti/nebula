@@ -538,14 +538,6 @@
         "activeTemplates": [
             {
                 "enabled": true,
-                "id": "btop"
-            },
-            {
-                "enabled": true,
-                "id": "zenBrowser"
-            },
-            {
-                "enabled": true,
                 "id": "niri"
             },
             {
