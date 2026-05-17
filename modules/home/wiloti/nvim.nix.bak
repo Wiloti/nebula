@@ -1,0 +1,385 @@
+{ inputs, ... }:
+{
+  flake.nixosModules.wilotiNvim =
+    { pkgs, lib, ... }:
+    {
+      home-manager.users.wiloti =
+        { config, ... }:
+        {
+          imports = [ inputs.nixvim.homeModules.nixvim ];
+          programs.nixvim = {
+            enable = true;
+
+            colorschemes.kanagawa-paper = {
+              enable = true;
+            };
+
+            opts = {
+              number = true;
+              relativenumber = true;
+              tabstop = 4;
+              softtabstop = 4;
+              shiftwidth = 4;
+              expandtab = true;
+              smartindent = true;
+              wrap = false;
+              swapfile = false;
+              backup = false;
+              undofile = true;
+              hlsearch = false;
+              incsearch = true;
+              termguicolors = true;
+              scrolloff = 8;
+              signcolumn = "yes";
+              updatetime = 50;
+              clipboard = "unnamedplus";
+              colorcolumn = "80";
+              splitright = true;
+              splitbelow = true;
+            };
+
+            globals.mapleader = " ";
+
+            keymaps = [
+              # -- Visual mode movement --
+              {
+                mode = "v";
+                key = "J";
+                action = ":m '>+1<CR>gv=gv";
+                options.desc = "Move selection down";
+              }
+              {
+                mode = "v";
+                key = "K";
+                action = ":m '<-2<CR>gv=gv";
+                options.desc = "Move selection up";
+              }
+              # -- Normal mode QoL --
+              {
+                mode = "n";
+                key = "J";
+                action = "mzJ`z";
+                options.desc = "Join line without moving cursor";
+              }
+              {
+                mode = "n";
+                key = "<C-d>";
+                action = "<C-d>zz";
+                options.desc = "Half page down centered";
+              }
+              {
+                mode = "n";
+                key = "<C-u>";
+                action = "<C-u>zz";
+                options.desc = "Half page up centered";
+              }
+              {
+                mode = "n";
+                key = "n";
+                action = "nzzzv";
+                options.desc = "Next search result centered";
+              }
+              {
+                mode = "n";
+                key = "N";
+                action = "Nzzzv";
+                options.desc = "Previous search result centered";
+              }
+              {
+                mode = "x";
+                key = "<leader>p";
+                action = ''"_dP'';
+                options.desc = "Paste without overwriting clipboard";
+              }
+              {
+                mode = "n";
+                key = "Q";
+                action = "<nop>";
+                options.desc = "Disable Ex mode";
+              }
+              {
+                mode = "n";
+                key = "<leader>s";
+                action = ":%s/\\<<C-r><C-w>\\>/<C-r><C-w>/gI<Left><Left><Left>";
+                options.desc = "Search and replace word under cursor";
+              }
+              {
+                mode = "n";
+                key = "<leader>o";
+                action = "<cmd>Oil --float<CR>";
+                options.desc = "Open file manager";
+              }
+              # -- Trouble keymaps moved here from trouble.keymaps --
+              # Recent nixvim versions handle trouble keymaps more reliably
+              # through the top-level keymaps list than through the plugin's
+              # own keymaps field, which had a registration timing issue.
+              {
+                mode = "n";
+                key = "<leader>xx";
+                action = "<cmd>Trouble diagnostics toggle filter.buf=0<cr>";
+                options.desc = "Buffer diagnostics (Trouble)";
+              }
+              {
+                mode = "n";
+                key = "<leader>xX";
+                action = "<cmd>Trouble diagnostics toggle<cr>";
+                options.desc = "Workspace diagnostics (Trouble)";
+              }
+              {
+                mode = "n";
+                key = "<leader>xq";
+                action = "<cmd>Trouble qflist toggle<cr>";
+                options.desc = "Quickfix list (Trouble)";
+              }
+            ];
+
+            # extraConfigLua runs after all plugins are loaded and configured.
+            # We use it for LSP visual polish and diagnostic configuration
+            # that nixvim doesn't expose as first-class options.
+            extraConfigLua = ''
+              -- Rounded borders for all LSP floating windows.
+              -- This affects hover documentation (K), signature help,
+              -- and the diagnostic float that appears on cursor hold.
+              local border = "rounded"
+
+              vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(
+                vim.lsp.handlers.hover,
+                { border = border }
+              )
+              vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(
+                vim.lsp.handlers.signature_help,
+                { border = border }
+              )
+
+              -- Diagnostic display configuration.
+              -- virtual_text shows inline hints after code lines.
+              -- float configures the popup that appears when you press
+              -- <leader>dp or <leader>dn to navigate between diagnostics.
+              -- source = "if_many" only shows the source when multiple
+              -- diagnostic sources are active (avoids clutter otherwise).
+              vim.diagnostic.config({
+                float = {
+                  border = border,
+                  source = "if_many",
+                  header = "",
+                  prefix = "",
+                },
+                virtual_text = {
+                  prefix = "●",
+                },
+                signs = true,
+                underline = true,
+                update_in_insert = false,
+              })
+            '';
+
+            plugins = {
+              web-devicons.enable = true;
+              fidget.enable = true;
+              vim-tmux-navigator.enable = true;
+
+              # which-key shows available keybindings in a popup after
+              # pressing the leader key and waiting delay milliseconds.
+              # rounded border matches our LSP popup style for visual consistency.
+              which-key = {
+                enable = true;
+                settings = {
+                  delay = 300;
+                  icons.enabled = true;
+                  win.border = "rounded";
+                  win.padding = [ 1 2 ];
+                };
+              };
+
+              # blink-cmp is the completion engine. It queries LSP servers,
+              # open buffers, and file paths simultaneously and merges results.
+              # The ghost_text feature shows a faint inline preview of the
+              # top completion without opening the full menu.
+              blink-cmp = {
+                enable = true;
+                settings = {
+                  keymap = {
+                    preset = "none";
+                    "<C-p>" = [ "select_prev" "fallback" ];
+                    "<C-n>" = [ "select_next" "fallback" ];
+                    "<C-y>" = [ "accept" "fallback" ];
+                    "<C-Space>" = [ "show" "show_documentation" "hide_documentation" ];
+                    "<C-e>" = [ "hide" "fallback" ];
+                  };
+                  appearance = {
+                    nerd_font_variant = "normal";
+                  };
+                  sources = {
+                    default = [ "lsp" "buffer" "path" ];
+                  };
+                  snippets = {
+                    preset = "luasnip";
+                  };
+                  completion = {
+                    # The completion menu and documentation popup both
+                    # use rounded borders to match the rest of the UI.
+                    menu.border = "rounded";
+                    documentation = {
+                      auto_show = true;
+                      auto_show_delay_ms = 200;
+                      window.border = "rounded";
+                    };
+                    ghost_text.enabled = true;
+                  };
+                };
+              };
+
+              luasnip.enable = true;
+
+              lsp = {
+                enable = true;
+                servers = {
+                  lua_ls = {
+                    enable = true;
+                    settings = {
+                      Lua = {
+                        runtime.version = "Lua 5.1";
+                        diagnostics = {
+                          globals = [
+                            "vim" "bit" "it" "describe"
+                            "before_each" "after_each"
+                          ];
+                        };
+                      };
+                    };
+                  };
+                  # rust_analyzer installs rustc and cargo declaratively
+                  # through nixvim so they're available inside nvim's
+                  # environment without a separate Rust toolchain installation.
+                  rust_analyzer = {
+                    enable = true;
+                    installRustc = true;
+                    installCargo = true;
+                  };
+                  gopls.enable = true;
+                  clangd.enable = true;
+                  # nil_ls provides Nix language support — completions,
+                  # go-to-definition for nixpkgs attributes, and diagnostics
+                  # for syntax errors in your NixOS configuration files.
+                  nil_ls.enable = true;
+                  basedpyright.enable = true;
+                  bashls.enable = true;
+                  phpactor.enable = true;
+                };
+                keymaps = {
+                  lspBuf = {
+                    "gd" = { action = "definition"; desc = "Go to definition"; };
+                    "gD" = { action = "declaration"; desc = "Go to declaration"; };
+                    "gi" = { action = "implementation"; desc = "Go to implementation"; };
+                    "gr" = { action = "references"; desc = "Go to references"; };
+                    "K" = { action = "hover"; desc = "Show hover documentation"; };
+                    "<leader>ca" = { action = "code_action"; desc = "Code action"; };
+                    "<leader>rn" = { action = "rename"; desc = "Rename symbol"; };
+                    "<leader>f" = { action = "format"; desc = "Format buffer"; };
+                  };
+                  diagnostic = {
+                    "<leader>dp" = { action = "goto_prev"; desc = "Previous diagnostic"; };
+                    "<leader>dn" = { action = "goto_next"; desc = "Next diagnostic"; };
+                  };
+                };
+              };
+
+              treesitter = {
+                enable = true;
+                settings = {
+                  auto_install = false;
+                  highlight = {
+                    enable = true;
+                    # Markdown needs both treesitter and regex highlighting
+                    # to render emphasis, headings, and code blocks correctly.
+                    additional_vim_regex_highlighting = [ "markdown" ];
+                  };
+                  indent.enable = true;
+                };
+                grammarPackages = with config.programs.nixvim.plugins.treesitter.package.builtGrammars; [
+                  vimdoc lua rust go c nix python bash
+                  javascript typescript php markdown markdown-inline
+                  toml yaml json regex comment
+                ];
+              };
+
+              telescope = {
+                enable = true;
+                settings = {
+                  defaults = {
+                    vimgrep_arguments = [
+                      "rg" "--color=never" "--no-heading"
+                      "--with-filename" "--line-number" "--column" "--smart-case"
+                    ];
+                    find_command = [
+                      "fd" "--type" "f" "--hidden" "--follow" "--exclude" ".git"
+                    ];
+                  };
+                };
+                keymaps = {
+                  "<leader>ff" = { action = "find_files"; options.desc = "Find files"; };
+                  "<C-p>" = { action = "git_files"; options.desc = "Find git files"; };
+                  "<leader>fws" = { action = "grep_string"; options.desc = "Grep word under cursor"; };
+                  "<leader>fWs" = { action = "grep_string"; options.desc = "Grep WORD under cursor"; };
+                  "<leader>fs" = { action = "live_grep"; options.desc = "Live grep"; };
+                  "<leader>vh" = { action = "help_tags"; options.desc = "Help tags"; };
+                  "<leader>fb" = { action = "buffers"; options.desc = "Find buffers"; };
+                  "<leader>fd" = { action = "diagnostics"; options.desc = "Find diagnostics"; };
+                };
+              };
+
+              oil = {
+                enable = true;
+                settings = {
+                  view_options.show_hidden = true;
+                  float.enabled = true;
+                };
+              };
+
+              # mini.nvim is a collection of small independent modules.
+              # The enable = true on the parent is REQUIRED — without it,
+              # nixvim never adds the mini.nvim package to the vim pack
+              # directory, so Lua can't find any of the mini.* modules.
+              # This was the root cause of the "module not found" errors.
+              mini = {
+                enable = true;
+                modules = {
+                  # mini.pairs: auto-insert closing brackets and quotes.
+                  # Type ( to get () with cursor between. Type " to get "".
+                  pairs = { };
+                  # mini.surround: add/change/delete surrounding characters.
+                  # sa + motion + char: add surrounding
+                  # sd + char: delete surrounding
+                  # sr + old + new: replace surrounding
+                  # Example: saiw" surrounds inner word with double quotes.
+                  surround = { };
+                  # mini.comment: toggle comments with gc.
+                  # gcc: comment current line
+                  # gc + motion: comment range
+                  # visual gc: comment selection
+                  comment = { };
+                };
+              };
+
+              indent-blankline = {
+                enable = true;
+                settings = {
+                  indent.char = "│";
+                  scope.enabled = true;
+                };
+              };
+
+              # Trouble provides a pretty diagnostics panel that replaces
+              # nvim's default quickfix list with a more readable interface.
+              # Note: keymaps for trouble are declared in the top-level
+              # keymaps list above rather than here, because recent nixvim
+              # versions register them more reliably that way.
+              trouble = {
+                enable = true;
+              };
+
+            };
+          };
+        };
+    };
+}

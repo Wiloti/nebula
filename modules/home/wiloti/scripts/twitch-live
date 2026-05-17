@@ -1,0 +1,427 @@
+#!/usr/bin/env python3
+"""
+twitch-live — Twitch followed channels live viewer
+
+Queries the Twitch Helix API for live channels you follow,
+presents them through fzf sorted by viewer count, and opens
+the selected stream in MPV via streamlink.
+
+Authentication is completely self-managing:
+  - Access tokens are refreshed automatically when they expire
+  - If the refresh token itself is invalid, a Device Code Flow
+    runs interactively right here — no external tools needed
+  - All credential saves are atomic — no partial writes ever
+
+Credentials file: ~/.config/twitch/credentials
+Required fields:  TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET,
+                  TWITCH_TOKEN, TWITCH_REFRESH_TOKEN, TWITCH_USER_ID
+"""
+
+import os
+import sys
+import json
+import time
+import tempfile
+import subprocess
+from pathlib import Path
+from urllib import request, parse, error as url_error
+
+
+# ---------------------------------------------------------------------------
+# Credentials management
+# ---------------------------------------------------------------------------
+
+def get_credentials_path() -> Path:
+    """Return the path to the credentials file, respecting XDG_CONFIG_HOME."""
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return config_home / "twitch" / "credentials"
+
+
+def load_credentials() -> dict:
+    """
+    Load credentials from the file into a dictionary.
+
+    The credentials file uses a simple KEY="value" format that both
+    bash (via source) and Python can read. We parse it manually rather
+    than using configparser because we need to preserve the exact format
+    for bash compatibility when we write it back.
+    """
+    path = get_credentials_path()
+    if not path.exists():
+        print(f"Credentials file not found at: {path}", file=sys.stderr)
+        print("Create it with your Twitch Client ID, Client Secret,", file=sys.stderr)
+        print("and User ID. The script will handle token generation.", file=sys.stderr)
+        sys.exit(1)
+
+    creds = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if "=" in line and not line.startswith("#"):
+            key, _, value = line.partition("=")
+            # Strip surrounding quotes that bash source requires.
+            creds[key.strip()] = value.strip().strip('"')
+    return creds
+
+
+def save_credentials(creds: dict) -> None:
+    """
+    Atomically write credentials back to disk.
+
+    We write to a temporary file first, then use os.replace() to swap
+    it into place. os.replace() is guaranteed atomic on POSIX systems
+    when source and destination are on the same filesystem — the file
+    is never in a partially-written state, even if the process is killed
+    mid-write. We also set permissions to 600 before the rename so the
+    file is never world-readable, even briefly.
+    """
+    path = get_credentials_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    content = "\n".join([
+        f'TWITCH_CLIENT_ID="{creds["TWITCH_CLIENT_ID"]}"',
+        f'TWITCH_CLIENT_SECRET="{creds["TWITCH_CLIENT_SECRET"]}"',
+        f'TWITCH_TOKEN="{creds["TWITCH_TOKEN"]}"',
+        f'TWITCH_REFRESH_TOKEN="{creds["TWITCH_REFRESH_TOKEN"]}"',
+        f'TWITCH_USER_ID="{creds["TWITCH_USER_ID"]}"',
+    ]) + "\n"
+
+    # Write to a temp file in the same directory as the target so that
+    # os.replace() stays on the same filesystem (required for atomicity).
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent)
+    try:
+        os.chmod(tmp_path, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except Exception:
+        # Clean up the temp file if anything goes wrong.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+# ---------------------------------------------------------------------------
+# HTTP helpers
+# ---------------------------------------------------------------------------
+
+def twitch_post(url: str, data: dict) -> dict:
+    """Make a POST request to the Twitch OAuth endpoint and return parsed JSON."""
+    encoded = parse.urlencode(data).encode()
+    req = request.Request(url, data=encoded, method="POST")
+    with request.urlopen(req) as resp:
+        return json.loads(resp.read())
+
+
+def twitch_get(endpoint: str, creds: dict) -> tuple[int, dict]:
+    """
+    Make an authenticated GET request to the Helix API.
+
+    Returns a tuple of (http_status_code, parsed_json_body). The caller
+    is responsible for checking the status code and deciding whether to
+    refresh the token. We return the status rather than raising an exception
+    because a 401 is an expected condition that the caller handles, not
+    an error.
+    """
+    url = f"https://api.twitch.tv/helix/{endpoint}"
+    req = request.Request(url, headers={
+        "Authorization": f"Bearer {creds['TWITCH_TOKEN']}",
+        "Client-Id": creds["TWITCH_CLIENT_ID"],
+    })
+    try:
+        with request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read())
+    except url_error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+def refresh_token(creds: dict) -> bool:
+    """
+    Exchange the refresh token for a new access token and refresh token.
+
+    Returns True if the refresh succeeded and creds was updated in place,
+    or False if the refresh token was invalid or already consumed. The
+    caller should fall back to device_code_flow() on False.
+
+    The key insight here is that Twitch rotates refresh tokens — every
+    successful refresh produces a new refresh token and invalidates the
+    old one. This is why we must save the new refresh token immediately
+    after every successful exchange. Python makes this easy because we
+    can update the creds dict and call save_credentials() in the same
+    function without any subshell scoping concerns.
+    """
+    print("Access token expired, refreshing...", file=sys.stderr)
+    try:
+        response = twitch_post("https://id.twitch.tv/oauth2/token", {
+            "client_id": creds["TWITCH_CLIENT_ID"],
+            "client_secret": creds["TWITCH_CLIENT_SECRET"],
+            "refresh_token": creds["TWITCH_REFRESH_TOKEN"],
+            "grant_type": "refresh_token",
+        })
+    except Exception as e:
+        print(f"Refresh request failed: {e}", file=sys.stderr)
+        return False
+
+    if "access_token" not in response:
+        # Twitch returns an error field when the refresh token is invalid.
+        error = response.get("message", response.get("error", "unknown error"))
+        print(f"Refresh failed: {error}", file=sys.stderr)
+        return False
+
+    # Update creds in place and save atomically.
+    # This is the critical difference from bash: there are no subshells
+    # here — creds is a regular Python dict passed by reference, and
+    # save_credentials() writes it to disk in the same process.
+    creds["TWITCH_TOKEN"] = response["access_token"]
+    creds["TWITCH_REFRESH_TOKEN"] = response.get(
+        "refresh_token", creds["TWITCH_REFRESH_TOKEN"]
+    )
+    save_credentials(creds)
+    print("Token refreshed successfully.", file=sys.stderr)
+    return True
+
+
+def device_code_flow(creds: dict) -> None:
+    """
+    Run a complete OAuth 2.0 Device Code Flow and update creds in place.
+
+    This is only called when refresh_token() returns False, meaning the
+    refresh token is invalid or expired. In practice this should happen
+    at most once every 30 days of inactivity, not on every run.
+
+    The flow works like a TV authorization: we request a short code from
+    Twitch, you visit a URL and type the code to authorize, and we poll
+    Twitch in the background until it confirms the authorization. No
+    redirect URI, no localhost server, no browser automation needed.
+    """
+    print("\nStarting Twitch Device Code Flow authentication...", file=sys.stderr)
+
+    try:
+        device_resp = twitch_post("https://id.twitch.tv/oauth2/device", {
+            "client_id": creds["TWITCH_CLIENT_ID"],
+            "scope": "user:read:follows",
+        })
+    except Exception as e:
+        print(f"Failed to start device code flow: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    device_code = device_resp["device_code"]
+    user_code = device_resp["user_code"]
+    verification_uri = device_resp["verification_uri"]
+    interval = device_resp.get("interval", 5)
+    expires_in = device_resp.get("expires_in", 1800)
+
+    print(f"\n  Visit: {verification_uri}", file=sys.stderr)
+    print(f"  Code:  {user_code}", file=sys.stderr)
+    print(f"\nWaiting for authorization (expires in {expires_in}s)...",
+          file=sys.stderr)
+
+    elapsed = 0
+    while elapsed < expires_in:
+        time.sleep(interval)
+        elapsed += interval
+
+        try:
+            token_resp = twitch_post("https://id.twitch.tv/oauth2/token", {
+                "client_id": creds["TWITCH_CLIENT_ID"],
+                "client_secret": creds["TWITCH_CLIENT_SECRET"],
+                "device_code": device_code,
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            })
+        except Exception:
+            # Network hiccup — keep polling.
+            continue
+
+        if "access_token" in token_resp:
+            # Authorization complete. Update creds and save immediately.
+            creds["TWITCH_TOKEN"] = token_resp["access_token"]
+            creds["TWITCH_REFRESH_TOKEN"] = token_resp.get(
+                "refresh_token", creds["TWITCH_REFRESH_TOKEN"]
+            )
+            save_credentials(creds)
+            print("Authentication successful.", file=sys.stderr)
+            return
+
+        # Handle the expected waiting states from the polling loop.
+        error = token_resp.get("message", token_resp.get("error", ""))
+        if "authorization_pending" in error.lower():
+            # Normal — user hasn't clicked authorize yet.
+            pass
+        elif "slow_down" in error.lower():
+            # Twitch wants us to poll less frequently.
+            interval += 1
+        elif "expired" in error.lower():
+            print("Authorization code expired. Run the script again.",
+                  file=sys.stderr)
+            sys.exit(1)
+        else:
+            print(f"Authentication error: {error}", file=sys.stderr)
+            sys.exit(1)
+
+    print("Authorization timed out.", file=sys.stderr)
+    sys.exit(1)
+
+
+def api_get(endpoint: str, creds: dict) -> dict:
+    """
+    Make an authenticated Helix API request with automatic token refresh.
+
+    This is the high-level API call that handles the full retry-on-401
+    lifecycle. The reason this works correctly in Python where it failed
+    in bash is straightforward: when refresh_token() updates creds["TWITCH_TOKEN"],
+    it's modifying the same dictionary object that api_get() passes to
+    twitch_get() on the retry. There are no copies, no subshells, no
+    forked processes — just one Python dict being updated in place.
+    """
+    status, data = twitch_get(endpoint, creds)
+
+    if status == 401:
+        # Try silent refresh first. If the refresh token is also invalid,
+        # fall back to full Device Code Flow re-authentication.
+        if not refresh_token(creds):
+            print("Refresh token invalid — starting fresh authentication.",
+                  file=sys.stderr)
+            device_code_flow(creds)
+
+        # Retry with the freshly updated token.
+        status, data = twitch_get(endpoint, creds)
+        if status != 200:
+            print(f"API error after token refresh: {status} {data}",
+                  file=sys.stderr)
+            sys.exit(1)
+
+    elif status != 200:
+        print(f"API error: {status} {data}", file=sys.stderr)
+        sys.exit(1)
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Main logic
+# ---------------------------------------------------------------------------
+
+def get_live_streams(creds: dict) -> list[dict]:
+    """
+    Fetch all live streams from channels the user follows.
+
+    This requires two API calls: one to get the list of followed channel
+    IDs, and one to check which of those channels are currently live.
+    The streams endpoint accepts up to 100 user_id parameters in a single
+    request, so we can check all followed channels at once.
+    """
+    print("Fetching followed channels...", file=sys.stderr)
+    followed_data = api_get(
+        f"channels/followed?user_id={creds['TWITCH_USER_ID']}&first=100",
+        creds
+    )
+
+    followed_ids = [ch["broadcaster_id"] for ch in followed_data.get("data", [])]
+    if not followed_ids:
+        print("No followed channels found.", file=sys.stderr)
+        return []
+
+    print("Checking live status...", file=sys.stderr)
+    query = "&".join(f"user_id={uid}" for uid in followed_ids)
+    streams_data = api_get(f"streams?{query}&first=100", creds)
+
+    streams = streams_data.get("data", [])
+    # Sort by viewer count descending so the most-watched streams appear first.
+    return sorted(streams, key=lambda s: s.get("viewer_count", 0), reverse=True)
+
+
+def format_stream(stream: dict) -> str:
+    """Format a stream entry for display in fzf."""
+    login = stream.get("user_login", "unknown")
+    title = stream.get("title", "No title").replace("\n", " ").replace("\t", " ")
+    game = stream.get("game_name", "Unknown").replace("\t", " ")
+    viewers = stream.get("viewer_count", 0)
+
+    if len(title) > 55:
+        title = title[:52] + "..."
+
+    return f"{login:<20} | {game:<18} — {title} ({viewers:,} viewers)"
+
+
+def select_with_fzf(display_lines: list[str]) -> str | None:
+    """
+    Present the list of live streams through fzf and return the selected line.
+
+    Returns None if the user pressed Esc or fzf exited without a selection.
+    We pass the display lines via stdin so fzf gets a proper TTY for its
+    interactive interface.
+    """
+    fzf_input = "\n".join(display_lines)
+    fzf_colors = (
+        "bg+:#363646,bg:#181616,spinner:#727169,hl:#c4746e,"
+        "fg:#c5c9c5,header:#8ba4b0,info:#727169,pointer:#87a987,"
+        "marker:#87a987,fg+:#c5c9c5,prompt:#87a987,hl+:#c4746e"
+    )
+
+    result = subprocess.run(
+        [
+            "fzf",
+            "--prompt=Twitch ❯ ",
+            "--header=Enter: watch stream  |  Esc: cancel",
+            "--height=40%",
+            "--layout=reverse",
+            "--border",
+            f"--color={fzf_colors}",
+        ],
+        input=fzf_input,
+        text=True,
+        capture_output=True,
+    )
+
+    # fzf exits with code 0 on selection, 1 on no match, 130 on Esc/Ctrl-C.
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def main() -> None:
+    creds = load_credentials()
+    streams = get_live_streams(creds)
+
+    if not streams:
+        print("No followed channels are currently live.", file=sys.stderr)
+        time.sleep(2)
+        sys.exit(0)
+
+    # Build a mapping from display line to channel login so we can look
+    # up the channel to open after the user makes their fzf selection.
+    display_lines = [format_stream(s) for s in streams]
+    login_map = {format_stream(s): s["user_login"] for s in streams}
+
+    selected = select_with_fzf(display_lines)
+    if selected is None:
+        sys.exit(0)
+
+    channel = login_map.get(selected)
+    if not channel:
+        print("Could not match selection to a channel.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Opening: twitch.tv/{channel}", file=sys.stderr)
+
+    # Spawn through niri's IPC so streamlink and its MPV child process
+    # are compositor-level processes with the correct Wayland environment.
+    # This ensures the MPV window survives after the ghostty terminal closes.
+    subprocess.run([
+        "niri", "msg", "action", "spawn", "--",
+        "streamlink",
+        "--player", "mpv",
+        "--player-args", "--title=feed-player",
+        "--twitch-disable-ads",
+        f"twitch.tv/{channel}",
+        "best",
+    ])
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# yt-feed — Google-free YouTube subscription feed viewer
+#
+# Fetches recent videos from subscribed channels via RSS and plays
+# selected videos in MPV through yt-dlp. Completely Google-account-free
+# since it uses YouTube's official public RSS feed API.
+#
+# Configuration files:
+#   ~/.config/yt-feed/channels    — one YouTube channel ID per line
+#                                   Lines starting with # are comments
+#   ~/.config/yt-feed/history     — watched video IDs (auto-managed)
+#
+# Usage:
+#   Tab           — toggle selection on an entry (multi-select)
+#   Enter         — play the first selected entry, dismiss all selected
+#   Esc           — cancel without changing anything
+#
+# Adding a channel:
+#   echo "# Channel Name"           >> ~/.config/yt-feed/channels
+#   echo "UCxxxxxxxxxxxxxxxxxxxxxx" >> ~/.config/yt-feed/channels
+
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/yt-feed"
+CHANNELS_FILE="$CONFIG_DIR/channels"
+HISTORY_FILE="$CONFIG_DIR/history"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/yt-feed"
+TEMP_RESULTS="$CACHE_DIR/feed_results.tmp"
+FZF_INPUT="$CACHE_DIR/fzf_input.tmp"
+
+# Ensure all required directories and files exist on first run.
+mkdir -p "$CONFIG_DIR" "$CACHE_DIR"
+touch "$CHANNELS_FILE" "$HISTORY_FILE"
+
+# If no channels are configured yet, print a helpful message and exit.
+if [ ! -s "$CHANNELS_FILE" ]; then
+    echo "No channels configured."
+    echo "Add channel IDs to $CHANNELS_FILE — one per line."
+    echo "Example: UCxxxxxxxxxxxxxxxxxxxxxx"
+    exit 0
+fi
+
+# fetch_channel fetches and parses a single channel's RSS feed.
+# It outputs tab-separated lines in the format:
+#   DATE<TAB>CHANNEL — TITLE<TAB>VIDEO_ID
+# The tab character is our reliable field separator since video titles
+# and channel names can contain most other special characters but
+# almost never contain literal tab characters.
+fetch_channel() {
+    local channel_id="$1"
+    local feed_url="https://www.youtube.com/feeds/videos.xml?channel_id=${channel_id}"
+    local xml xml_file
+
+    xml=$(curl -s --max-time 10 "$feed_url") || return 0
+    [ -z "$xml" ] && return 0
+
+    # Write XML to a temp file so Python can read it cleanly without
+    # any conflict between the heredoc and pipe stdin sources.
+    # We use mktemp to get a unique filename safe for parallel calls
+    # since multiple fetch_channel jobs run simultaneously.
+    xml_file=$(mktemp /tmp/yt-feed-xml.XXXXXX)
+    echo "$xml" > "$xml_file"
+
+    python3 - "$xml_file" << 'PYEOF'
+import sys
+import xml.etree.ElementTree as ET
+
+# Read the XML file passed as the first argument.
+# Using a file argument avoids any conflict between the heredoc
+# providing Python's code and a pipe providing its stdin.
+xml_content = open(sys.argv[1]).read()
+
+if not xml_content.strip():
+    sys.exit(0)
+
+try:
+    root = ET.fromstring(xml_content)
+except ET.ParseError:
+    sys.exit(0)
+
+ns = {
+    'atom': 'http://www.w3.org/2005/Atom',
+    'yt':   'http://www.youtube.com/xml/schemas/2015',
+}
+
+channel_title_elem = root.find('atom:title', ns)
+channel_name = channel_title_elem.text if channel_title_elem is not None else 'Unknown'
+
+for entry in root.findall('atom:entry', ns):
+    video_id_elem  = entry.find('yt:videoId',     ns)
+    title_elem     = entry.find('atom:title',     ns)
+    published_elem = entry.find('atom:published', ns)
+    link_elem      = entry.find('atom:link',      ns)
+
+    if link_elem is not None:
+        href = link_elem.get('href', '')
+        if '/shorts/' in href:
+            continue
+
+    if video_id_elem is None or title_elem is None:
+        continue
+
+    video_id  = video_id_elem.text or ''
+    title     = (title_elem.text or 'Untitled').replace('\t', ' ')
+    channel   = channel_name.replace('\t', ' ')
+    published = published_elem.text[:10] if published_elem is not None else '????-??-??'
+
+    print(f"{published}\t{channel} — {title}\t{video_id}")
+
+PYEOF
+
+    # Always clean up the temp file, even if Python failed.
+    rm -f "$xml_file"
+}
+# --- Parallel feed fetching ---
+# Fetch all subscribed channels simultaneously by backgrounding each
+# fetch_channel call. This means 20 channels take the same time as 1
+# rather than 20 times as long. We truncate the results file first to
+# avoid stale entries from a previous run mixing with new ones.
+echo "Fetching feeds..." >&2
+: > "$TEMP_RESULTS"
+
+while IFS= read -r channel_id || [ -n "$channel_id" ]; do
+    # Skip empty lines and comment lines (lines starting with #).
+    [[ -z "$channel_id" || "$channel_id" == \#* ]] && continue
+    # Append operator >> is atomic for small writes on Linux, making
+    # it safe for concurrent background jobs to write simultaneously.
+    fetch_channel "$channel_id" >> "$TEMP_RESULTS" &
+done < "$CHANNELS_FILE"
+
+# Wait for all background fetch jobs to complete before proceeding.
+wait
+echo "Fetching complete." >&2
+
+# --- Build display list, filtering watched videos ---
+# We sort the raw results by date (newest first) and build two parallel
+# arrays: one with human-readable display strings for fzf, and one with
+# the corresponding video IDs for URL construction and history writing.
+# Parallel arrays are used because bash associative arrays don't preserve
+# insertion order, which matters for our "play the first selected" logic.
+declare -a display_lines=()
+declare -a video_ids=()
+
+while IFS=$'\t' read -r date label video_id; do
+    # Filter out videos already in our watch history. grep -qF uses
+    # fixed-string (non-regex) matching which is correct here since
+    # video IDs contain characters that would be regex metacharacters.
+    if grep -qF "$video_id" "$HISTORY_FILE" 2>/dev/null; then
+        continue
+    fi
+    display_lines+=("${date} | ${label}")
+    video_ids+=("$video_id")
+done < <(sort -r "$TEMP_RESULTS")
+
+# If every video in the feed has been watched, we're all caught up.
+if [ ${#display_lines[@]} -eq 0 ]; then
+    echo "No new videos — all caught up!" >&2
+    sleep 2
+    exit 0
+fi
+
+# Write display lines to a temp file so fzf reads from a file rather
+# than a pipe. This is necessary because fzf needs a proper TTY for
+# its interactive interface, and a pipe would compete with that.
+printf '%s\n' "${display_lines[@]}" > "$FZF_INPUT"
+
+# --- fzf selection ---
+# Multi-select mode lets you Tab through multiple entries to mark them
+# all for dismissal at once. Pressing Enter plays the first marked entry
+# and writes all marked entries to history. Pressing Esc cancels without
+# touching history at all — useful if you just wanted to look at the feed.
+mapfile -t SELECTED_LINES < <(fzf \
+    --prompt="Youtube ❯ " \
+    --header="Tab: mark  |  Enter: play first + dismiss marked  |  Esc: cancel" \
+    --multi \
+    --height=40% \
+    --layout=reverse \
+    --border \
+    --color='bg+:#363646,bg:#181616,spinner:#727169,hl:#c4746e,fg:#c5c9c5,header:#8ba4b0,info:#727169,pointer:#87a987,marker:#87a987,fg+:#c5c9c5,prompt:#87a987,hl+:#c4746e' \
+    < "$FZF_INPUT")
+
+# Esc or empty selection — exit cleanly without modifying history.
+[ ${#SELECTED_LINES[@]} -eq 0 ] && exit 0
+
+# --- Process selection ---
+# Walk through every selected line. Every selected entry gets written
+# to history immediately (whether played or just dismissed). The first
+# selected entry in array order is the one that gets played — this means
+# the video closest to the top of the feed plays, regardless of the
+# order you Tab-selected the entries.
+PLAY_INDEX=-1
+
+for selected in "${SELECTED_LINES[@]}"; do
+    for i in "${!display_lines[@]}"; do
+        if [ "${display_lines[$i]}" = "$selected" ]; then
+            # Write to history regardless of play/dismiss intent.
+            echo "${video_ids[$i]}" >> "$HISTORY_FILE"
+            # Record the first match as the one to play.
+            if [ "$PLAY_INDEX" -eq -1 ]; then
+                PLAY_INDEX=$i
+            fi
+            break
+        fi
+    done
+done
+
+if [ "$PLAY_INDEX" -eq -1 ]; then
+    echo "Error: could not find selected video in display list." >&2
+    exit 1
+fi
+
+VIDEO_ID="${video_ids[$PLAY_INDEX]}"
+VIDEO_URL="https://www.youtube.com/watch?v=${VIDEO_ID}"
+
+echo "Playing: $VIDEO_URL" >&2
+
+# Spawn MPV through niri's IPC rather than directly from this script.
+# This ensures MPV is a child of the compositor with the correct Wayland
+# display environment, so it survives after the ghostty window closes.
+# The --title flag identifies this as a feed-player window so the niri
+# window rule can route it to your secondary monitor (HDMI-A-1).
+niri msg action spawn -- mpv --title="Youtube-feed" "$VIDEO_URL"

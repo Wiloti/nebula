@@ -1,0 +1,40 @@
+title-text: ""
+desktop-image: "background.png"
+desktop-image-scale-method: "stretch"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ image {
+	left = 50%-150
+	top = 15%
+    file = "logo.png"
+}
+
++ boot_menu {
+  left = 50%-240
+  top = 60%
+  width = 480
+  height = 30%
+  item_color = #FDFEFF
+  selected_item_color = #F0D080
+  icon_width = 20
+  icon_height = 20
+  item_icon_space = 20
+  item_height = 36
+  item_padding = 5
+  item_spacing = 10
+  selected_item_pixmap_style = "select_*.png"
+}
+
++ label {
+  top = 82%
+  left = 35%
+  width = 30%
+  align = "center"
+  id = "__timeout__"
+  text = "Booting in %d seconds"
+  color = #FDFEFF
+}
