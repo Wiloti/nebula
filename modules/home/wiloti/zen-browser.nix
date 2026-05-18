@@ -51,6 +51,155 @@
                             };
                         };
 					};
+                    spacesForce = true;
+                    spaces = {
+                        "Home" = {
+                            id = "40928ad5-03f5-4084-82ef-271d3766986f";
+                            position = 1000;
+                            icon = "chrome://browser/skin/zen-icons/selectable/planet.svg";
+                            theme = {
+                                type = "gradient";
+                                colors = [
+                                    {
+                                        red = 17;
+                                        green = 18;
+                                        blue = 34;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 30;
+                                        green = 17;
+                                        blue = 34;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 17;
+                                        green = 33;
+                                        blue = 34;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                ];
+                                opacity = 0.607;
+                                texture = 0.0;
+                            };
+                        };
+                        "Work" = {
+                            id = "94cfa6ad-e121-439c-ac99-bd66145a96d6";
+                            position = 2000;
+                            icon = "chrome://browser/skin/zen-icons/selectable/terminal.svg";
+                            theme = {
+                                type = "gradient";
+                                colors = [
+                                    {
+                                        red = 20;
+                                        green = 31;
+                                        blue = 25;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 20;
+                                        green = 31;
+                                        blue = 25;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 24;
+                                        green = 31;
+                                        blue = 20;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                ];
+                                opacity = 0.607;
+                                texture = 0.0;
+                            };
+                        };
+                        "Languages" = {
+                            id = "0e231bcb-494e-4f6c-8298-9d54b0de1e5f";
+                            position = 3000;
+                            icon = "chrome://browser/skin/zen-icons/selectable/book.svg";
+                            theme = {
+                                type = "gradient";
+                                colors = [
+                                    {
+                                        red = 32;
+                                        green = 31;
+                                        blue = 19;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 23;
+                                        green = 32;
+                                        blue = 19;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 32;
+                                        green = 20;
+                                        blue = 19;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                ];
+                                opacity = 0.607;
+                                texture = 0.0;
+                            };
+                        };
+                        "Art" = {
+                            id = "5da9c834-99a8-4af0-a2cc-f1392620c114";
+                            position = 4000;
+                            icon = "chrome://browser/skin/zen-icons/selectable/palette.svg";
+                            theme = {
+                                type = "gradient";
+                                colors = [
+                                    {
+                                        red = 35;
+                                        green = 16;
+                                        blue = 20;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+                                    }
+                                    {
+                                        red = 35;
+                                        green = 28;
+                                        blue = 16;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+
+                                    }
+                                    {
+                                        red = 34;
+                                        green = 16;
+                                        blue = 35;
+                                        algorithm = "analogous";
+                                        type = "explicit-lightness";
+                                        lightness = 10;
+
+                                    }
+                                ];
+                                opacity = 0.607;
+                                texture = 0.0;
+                            };
+                        };
+                    };
                     mods = [
                         "e122b5d9-d385-4bf8-9971-e137809097d0" # No Top Sites
                         "253a3a74-0cc4-47b7-8b82-996a64f030d5" # Floating History
