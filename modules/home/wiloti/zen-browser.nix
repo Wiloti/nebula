@@ -307,6 +307,9 @@
                         {
                             id = "key_search";
                             key = "k";
+                            modifiers = {
+                                control = true;
+                            };
                         }
                         {
                             id = "key_gotoHistory";
@@ -366,7 +369,7 @@
                         }
                         {
                             id = "key_toggleMute";
-                            key = "m";
+                            key = "`";
                             modifiers = {
                                 control = true;
                             };

@@ -229,7 +229,7 @@
             "${inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight}/bin/zen-twilight";
           };
           "Mod+O" = { action = spawn (lib.getExe pkgs.obsidian); };
-          "Print" = { action = spawn-sh ''set -e; grim -t ppm -g "$(slurp -d)" - | satty -f - --initial-tool=arrow --copy-command=wl-copy --actions-on-escape="save-to-clipboard,exit" --disable-notifications''; };
+          "Print" = { action = spawn-sh ''set -e; grim -t ppm -g "$(slurp -d)" - | satty -f - --initial-tool=arrow --copy-command=wl-copy --corner-roundness=0 --actions-on-escape="save-to-clipboard,exit" --disable-notifications''; };
 
           "Mod+Alt+F" = { action = noctaliaIpc "lockScreen lock"; };
           "Mod+Alt+R" = { action = noctaliaIpc "launcher emoji"; };
