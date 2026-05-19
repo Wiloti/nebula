@@ -36,6 +36,7 @@
             self.nixosModules.wilotiMpv
             self.nixosModules.wilotiMedia
             self.nixosModules.wilotiBat
+            self.nixosModules.wilotiDirenv
 		];
 
 		environment.systemPackages = with pkgs; [
@@ -46,7 +47,6 @@
 			file
 			btop
 			p7zip
-            nvtopPackages.nvidia
             ffmpeg
 			ripgrep
 			firefox
@@ -54,12 +54,14 @@
             nautilus
 			binutils
             exiftool
-			powershell
-            wl-clipboard
-            fontpreview
-			nix-prefetch-github
             adw-gtk3
             nwg-look
+			powershell
+            obs-studio
+            fontpreview
+            wl-clipboard
+            nvtopPackages.nvidia
+			nix-prefetch-github
 		];
 
 		nix.settings.experimental-features = [ "nix-command" "flakes" ];
