@@ -1,4 +1,4 @@
-{ self, inputs, ... }: {
+{ ... }: {
   flake.nixosModules.voidVirtualization = { pkgs, lib, config, ... }: {
     virtualisation.libvirtd = {
       enable = true;
@@ -50,7 +50,6 @@
       podman-tui
       virtiofsd
       virt-viewer
-      pipx
     ];
   };
 }
