@@ -17,7 +17,6 @@
                 signal-desktop
                 obsidian
 			];
-			home.file.".config/quickshell/noctalia/settings.json".source = ./noctalia-settings.json;
             home.file.".ssh/sockets/.keep" = {
                 text = "";
             };

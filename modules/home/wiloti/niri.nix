@@ -1,14 +1,10 @@
-{ self, inputs, ... }: {
+{  inputs, ... }: {
   flake.nixosModules.wilotiNiri = { pkgs, lib, ... }: {
     home-manager.users.wiloti = { config, ... }: {
       programs.niri.settings = {
 
         spawn-at-startup = [
           { command = [ "${pkgs.xwayland-satellite}/bin/xwayland-satellite" ]; }
-          { command = [
-              "${inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/noctalia-shell"
-            ];
-          }
           { command = [ (lib.getExe pkgs.ghostty) ]; }
           { command = [
               "${inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight}/bin/zen-twilight"
@@ -173,7 +169,7 @@
 
         binds = with config.lib.niri.actions; let
           noctaliaIpc = cmd:
-            spawn-sh "noctalia-shell ipc call ${cmd}";
+            spawn-sh "noctalia msg ${cmd}";
         in {
 
           # -- Window management --
@@ -224,32 +220,32 @@
           "Mod+Shift+Slash" = { action = show-hotkey-overlay; };
           "Mod+Space" = { action = switch-layout "next"; };
           "Mod+T" = { action = spawn (lib.getExe pkgs.ghostty); };
-          "Mod+S" = { action = noctaliaIpc "launcher toggle"; };
+          "Mod+S" = { action = noctaliaIpc "panel-toggle launcher"; };
           "Mod+Y" = { action = spawn
             "${inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight}/bin/zen-twilight";
           };
           "Mod+O" = { action = spawn (lib.getExe pkgs.obsidian); };
           "Print" = { action = spawn-sh ''set -e; grim -t ppm -g "$(slurp -d)" - | satty -f - --initial-tool=arrow --copy-command=wl-copy --corner-roundness=0 --actions-on-escape="save-to-clipboard,exit" --disable-notifications''; };
 
-          "Mod+Alt+F" = { action = noctaliaIpc "lockScreen lock"; };
-          "Mod+Alt+R" = { action = noctaliaIpc "launcher emoji"; };
-          "Mod+Alt+P" = { action = noctaliaIpc "settings toggle"; };
-          "Mod+Alt+W" = { action = noctaliaIpc "sessionMenu toggle"; };
+          "Mod+Alt+F" = { action = noctaliaIpc "session lock"; };
+          "Mod+Alt+R" = { action = noctaliaIpc "panel-toggle launcher /emoji"; };
+          "Mod+Alt+P" = { action = noctaliaIpc "settings-toggle"; };
+          "Mod+Alt+W" = { action = noctaliaIpc "panel-toggle session"; };
 
           "XF86AudioRaiseVolume" = {
-            action = noctaliaIpc "volume increase";
+            action = noctaliaIpc "volume-up";
             allow-when-locked = true;
           };
           "XF86AudioLowerVolume" = {
-            action = noctaliaIpc "volume decrease";
+            action = noctaliaIpc "volume-down";
             allow-when-locked = true;
           };
           "XF86AudioMute" = {
-            action = noctaliaIpc "volume muteOutput";
+            action = noctaliaIpc "volume-mute";
             allow-when-locked = true;
           };
           "XF86AudioPlay" = {
-            action = noctaliaIpc "media playPause";
+            action = noctaliaIpc "media toggle";
             allow-when-locked = true;
           };
           "XF86AudioNext" = {
@@ -257,7 +253,7 @@
             allow-when-locked = true;
           };
           "XF86AudioPrev" = {
-            action = noctaliaIpc "media prev";
+            action = noctaliaIpc "media previous";
             allow-when-locked = true;
           };
           "Mod+Alt+Y" = { action = spawn-sh "ghostty --title='YouTube Feed' --command=yt-feed";};

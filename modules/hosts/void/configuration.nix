@@ -24,6 +24,7 @@
 
 			self.nixosModules.wilotiHomeManager
 			self.nixosModules.wilotiNiri
+            self.nixosModules.wilotiNoctalia
 			self.nixosModules.wilotiGit
 			self.nixosModules.wilotiGhostty
 			self.nixosModules.wilotiZsh
@@ -64,7 +65,13 @@
 			nix-prefetch-github
 		];
 
-		nix.settings.experimental-features = [ "nix-command" "flakes" ];
+		nix.settings = {
+            experimental-features = [ "nix-command" "flakes" ];
+            extra-substituters = [ "https://noctalia.cachix.org" ];
+            extra-trusted-public-keys = [
+                "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
+            ];
+        };
 		nixpkgs.config.allowUnfree = true;
         nix.gc = {
             automatic = true;
