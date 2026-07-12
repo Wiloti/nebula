@@ -78,6 +78,13 @@
             dates = "weekly";
             options = "--delete-older-than 7d";
         };
+        services.openssh = {
+            enable =true;
+            settings = {
+                PermitRootLogin = "no";
+            };
+        };
+
 		system.stateVersion = "25.11";
 	};
 }

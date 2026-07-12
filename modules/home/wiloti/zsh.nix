@@ -99,10 +99,10 @@
         enable = true;
         enableZshIntegration = true;
         defaultCommand = "fd --type f --hidden --follow --exclude .git";
-        fileWidgetCommand = "fd --type f --hidden --follow --exclude .git";
-        fileWidgetOptions = [ "--preview 'cat {}'" ];
-        changeDirWidgetCommand = "fd --type d --hidden --follow --exclude .git";
-        changeDirWidgetOptions = [ "--preview 'ls {}'" ];
+        fileWidget.command = "fd --type f --hidden --follow --exclude .git";
+        fileWidget.options = [ "--preview 'cat {}'" ];
+        changeDirWidget.command = "fd --type d --hidden --follow --exclude .git";
+        changeDirWidget.options = [ "--preview 'ls {}'" ];
 
         colors = {
           "bg+"     = "#363646"; # waveBlue1 — selected item background

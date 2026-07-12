@@ -1,4 +1,4 @@
-{self, inputs, ... }: {
+{ ... }: {
 	flake.nixosModules.voidNetworking = {pkgs, lib, ... }: {
 		networking = {
 			hostName = "void";

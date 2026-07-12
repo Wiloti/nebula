@@ -197,7 +197,6 @@
             plugins = {
               web-devicons.enable = true;
               fidget.enable = true;
-              vim-tmux-navigator.enable = true;
 
               which-key = {
                 enable = true;
