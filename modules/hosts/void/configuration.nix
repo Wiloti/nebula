@@ -63,6 +63,7 @@
             wl-clipboard
             nvtopPackages.nvidia
 			nix-prefetch-github
+            discord-ptb
 		];
 
 		nix.settings = {
