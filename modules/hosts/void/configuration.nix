@@ -18,6 +18,7 @@
 			self.nixosModules.commonGit
 			self.nixosModules.commonGhostty
 			self.nixosModules.commonZsh
+            self.nixosModules.commonGlance
 
 			self.nixosModules.desktopNiri
 			self.nixosModules.desktopSddm
@@ -35,7 +36,6 @@
 			self.nixosModules.wilotiZenBrowser
             self.nixosModules.wilotiMpd
             self.nixosModules.wilotiMpv
-            self.nixosModules.wilotiMedia
             self.nixosModules.wilotiBat
             self.nixosModules.wilotiDirenv
 		];
