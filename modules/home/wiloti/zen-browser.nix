@@ -698,7 +698,7 @@
                             disabled = true;
                         }
                     ];
-                    keyboardShortcutsVersion = 19;
+                    keyboardShortcutsVersion = 20;
 				};
 			};
 		};
