@@ -5,51 +5,34 @@
             enable = true;
             settings = {
                 server = {
-                    host = "0.0.0.0";
+                    host = "127.0.0.2";
                     port = 8080;
                 };
                 pages = [
                     {
-                        name = "Videos";
-                        slug = "videos";
+                        name = "Languages";
+                        slug = "languages";
                         desktop-navigation-width = "wide";
-                        head-widgets = [
-                            {
-                                type = "twitch-channels";
-                                channels = [
-                                    "shisheyu"
-                                    "zerator"
-                                    "otplol_"
-                                    "mistermv"
-                                    "hackthebox"
-                                    "thelaluka"
-                                    "rootme_org"
-                                ];
-                                hide-header = true;
-                                collapse-after = 1;
-                                style = "horizontal-cards";
-                            }
-                        ];
-
                         columns = [
                             {
                                 size = "full";
                                 widgets = [
                                     {
-                                        type = "videos";
-                                        title = "凪";
-                                        limit = 6;
-                                        include-shorts = false;
-                                        style = "horizontal-cards";
-                                        channels = [ "UCbn-_A-tv1UsVYsgxbUU1Ow" ];
-                                    }
-                                    {
-                                        type = "videos";
-                                        title = "Archipel";
-                                        limit = 6;
-                                        include-shorts = false;
-                                        style = "horizontal-cards";
-                                        channels = [ "UC3zoY9LapZERsN7caDKqz0w" ];
+                                        type = "group";
+                                        widgets = map
+                                            ({ name, id }: {
+                                                type = "videos";
+                                                title = name;
+                                                include-shorts = false;
+                                                style = "horizontal-cards";
+                                                limit = 6;
+                                                channels = [ id ];
+                                            }
+                                        )
+                                        [
+                                            { name = "凪"; id = "UCbn-_A-tv1UsVYsgxbUU1Ow"; }
+                                            { name = "Archipel"; id = "UC3zoY9LapZERsN7caDKqz0w"; }
+                                        ];
                                     }
                                 ];
                             }
