@@ -8,10 +8,20 @@
                     host = "127.0.0.2";
                     port = 8080;
                 };
+                theme = {
+                    background-color = "240 13 14";
+                    primary-color = "51 33 68";
+                    negative-color = "358 100 68";
+                    contrast-multiplier = 1.2;
+                };
+                branding = {
+                    custom-footer = "<p>Wiloti's Abyss</p>";
+                    hide-footer = false;
+                };
                 pages = [
                     {
-                        name = "Languages";
-                        slug = "languages";
+                        name = "Japan 🇯🇵";
+                        slug = "japan";
                         desktop-navigation-width = "wide";
                         columns = [
                             {
