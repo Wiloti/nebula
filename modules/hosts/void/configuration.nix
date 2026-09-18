@@ -18,7 +18,6 @@
 			self.nixosModules.commonGit
 			self.nixosModules.commonGhostty
 			self.nixosModules.commonZsh
-            self.nixosModules.commonGlance
 
 			self.nixosModules.desktopNiri
 			self.nixosModules.desktopSddm
