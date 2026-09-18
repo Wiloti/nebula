@@ -64,6 +64,7 @@
             nvtopPackages.nvidia
 			nix-prefetch-github
             discord-ptb
+            pipx
 		];
 
 		nix.settings = {

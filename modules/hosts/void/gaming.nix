@@ -42,20 +42,6 @@
       protonup-qt
       steam-run
       appimage-run
-      (writeShellScriptBin "knight-launcher" ''
-                SPIRAL_DIR="$HOME/games/SteamLibrary/steamapps/common/Spiral Knights"
-                JAR="$SPIRAL_DIR/KnightLauncher.jar"
-
-                if [ ! -f "$JAR" ]; then
-                  echo "KnightLauncher.jar not found at: $JAR"
-                  echo "Download it "
-                  echo "and place it in your Spiral Knights installation directory."
-                  exit 1
-                fi
-
-                exec ${steam-run}/bin/steam-run \
-                  ${jdk}/bin/java -jar "$JAR" "$@"
-      '')
     ];
   };
 }
