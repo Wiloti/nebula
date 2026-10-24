@@ -1,4 +1,4 @@
-{ self, inputs, ... }: {
+{ ... }: {
   flake.nixosModules.wilotiTmux = { pkgs, lib, ... }: {
     home-manager.users.wiloti = {
 
@@ -66,9 +66,9 @@
             '';
           }
           {
-            plugin = resurrect;
+            plugin = persist;
             extraConfig = ''
-              set -g @resurrect-capture-pane-contents "on"
+              set -g @persist-capture-pane-contents "on"
             '';
           }
           {

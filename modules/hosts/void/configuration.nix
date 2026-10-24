@@ -64,6 +64,7 @@
 			nix-prefetch-github
             discord-ptb
             pipx
+            claude-code
 		];
 
 		nix.settings = {
