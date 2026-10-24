@@ -50,7 +50,7 @@
         shell = "${pkgs.zsh}/bin/zsh";
 
         plugins = with pkgs.tmuxPlugins; [
-          tmux-sesssion-manager
+          tmux-session-manager
           vim-tmux-navigator
           yank
           {
