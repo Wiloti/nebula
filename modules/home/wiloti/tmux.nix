@@ -50,6 +50,7 @@
         shell = "${pkgs.zsh}/bin/zsh";
 
         plugins = with pkgs.tmuxPlugins; [
+          tmux-sesssion-manager
           vim-tmux-navigator
           yank
           {
@@ -63,19 +64,6 @@
               set -g @ukiyo-border-contrast false
               set -g @ukiyo-ignore-window-colors true
               set -g @ukiyo-left-icon-padding 0
-            '';
-          }
-          {
-            plugin = persist;
-            extraConfig = ''
-              set -g @persist-capture-pane-contents "on"
-            '';
-          }
-          {
-            plugin = continuum;
-            extraConfig = ''
-              set -g @continuum-restore "on"
-              set -g @continuum-save-interval "10"
             '';
           }
         ];
